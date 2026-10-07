@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Student Performance Predictor</title>
+<style>
+  :root{--bg:#f6f7fb;--card:#fff;--ink:#1c2233;--mute:#6b7287;--line:#e4e7f0;--brand:#4f46e5;--brand2:#eef0ff;--bad:#dc2626}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--ink);line-height:1.45}
+  header{background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#fff;padding:28px 20px}
+  header h1{margin:0 0 4px;font-size:1.6rem}
+  header p{margin:0;opacity:.85}
+  main{max-width:1100px;margin:0 auto;padding:20px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 20px;margin-bottom:18px}
+  .card h2{margin:0 0 12px;font-size:1.1rem}
+  .row{display:flex;flex-wrap:wrap;gap:14px;align-items:center}
+  .grid{display:grid;gap:18px;grid-template-columns:1fr 1fr}
+  @media(max-width:800px){.grid{grid-template-columns:1fr}}
+  button{background:var(--brand);color:#fff;border:0;border-radius:9px;padding:9px 16px;font-size:.95rem;cursor:pointer;font-weight:600}
+  button:hover{filter:brightness(1.1)} button.ghost{background:var(--brand2);color:var(--brand)}
+  button:disabled{opacity:.5;cursor:wait}
+  label{font-size:.85rem;color:var(--mute);display:block;margin-bottom:3px}
+  input,select{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-size:.95rem;background:#fff}
+  input[type=checkbox]{width:auto;margin-right:6px}
+  .check{display:flex;align-items:center;font-size:.92rem;color:var(--ink)}
+  .badge{display:inline-block;padding:3px 10px;border-radius:99px;font-size:.78rem;font-weight:600}
+  .badge.synth{background:#fef3c7;color:#92400e}.badge.real{background:#dcfce7;color:#166534}
+  table{width:100%;border-collapse:collapse;font-size:.9rem}
+  th,td{padding:8px 10px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+  th:first-child,td:first-child{text-align:left}
+  th{color:var(--mute);font-weight:600;font-size:.8rem;text-transform:uppercase;letter-spacing:.03em}
+  tr.best td{background:#f1f5ff;font-weight:600}
+  .scroll{overflow-x:auto}
+  .tabs{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}
+  .tab{padding:6px 12px;border-radius:99px;background:var(--brand2);color:var(--brand);cursor:pointer;font-size:.85rem;font-weight:600}
+  .tab.on{background:var(--brand);color:#fff}
+  .bar{display:grid;grid-template-columns:130px 1fr 60px;gap:8px;align-items:center;margin:5px 0;font-size:.85rem}
+  .bar .track{background:#f0f1f7;border-radius:6px;height:16px;overflow:hidden}
+  .bar .fill{height:100%;border-radius:6px;background:var(--brand)}
+  .bar .fill.neg{background:var(--bad)}
+  .bar .n{text-overflow:ellipsis;overflow:hidden;white-space:nowrap}
+  .bar .v{text-align:right;color:var(--mute)}
+  .form{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+  .pred{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:14px}
+  .pred div{background:var(--brand2);border-radius:12px;padding:14px;text-align:center}
+  .pred b{display:block;font-size:1.9rem;color:var(--brand)} .pred span{font-size:.8rem;color:var(--mute)}
+  .note{font-size:.85rem;color:var(--mute)}
+  .err{color:var(--bad);font-size:.9rem;margin-top:8px}
+  canvas{width:100%;height:300px;display:block}
+  .hist{display:flex;align-items:flex-end;gap:3px;height:110px}
+  .hist div{flex:1;background:var(--brand);border-radius:3px 3px 0 0;min-height:2px;opacity:.85}
+  .hist-l{display:flex;gap:3px;font-size:.65rem;color:var(--mute)} .hist-l span{flex:1;text-align:center}
+  .grade{font-size:.95rem;margin-top:10px;text-align:center}
+</style>
+</head>
+<body>
+<header>
+  <h1>🎓 Student Performance Predictor</h1>
+  <p>Predict a student's final grade (G3, out of 20) with Linear Regression, Decision Tree and Random Forest</p>
+</header>
+<main>
+
+  <section class="card">
+    <h2>1 · Dataset</h2>
+    <div class="row">
+      <span id="srcBadge" class="badge"></span>
+      <span id="srcInfo" class="note"></span>
+    </div>
+    <div class="row" id="uploadRow" style="margin-top:12px">
+      <input type="file" id="file" accept=".csv" style="max-width:320px">
+      <button class="ghost" id="uploadBtn">Upload CSV</button>
+      <button class="ghost" id="resetBtn">Reset to default data</button>
+    </div>
+    <p class="note" id="uploadNote">Upload the UCI <code>student-mat.csv</code> (semicolon or comma separated). It must contain the <code>G3</code> column.</p>
+    <div id="upErr" class="err"></div>
+    <div class="grid" style="margin-top:12px">
+      <div><label>Final grade (G3) distribution — mean <b id="mean"></b></label>
+        <div class="hist" id="hist"></div><div class="hist-l" id="histL"></div></div>
+      <div class="scroll"><label>Preview</label><table id="preview"></table></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>2 · Train models</h2>
+    <div class="row">
+      <label class="check" id="prevWrap"><input type="checkbox" id="usePrev">Include previous grades G1 &amp; G2</label>
+      <label class="check"><input type="checkbox" id="dropZero">Exclude G3 = 0 (dropouts)</label>
+      <div style="width:150px"><label>Test size: <b id="tsv">20%</b></label>
+        <input type="range" id="testSize" min="10" max="40" step="5" value="20"></div>
+      <button id="trainBtn">Train &amp; evaluate</button>
+    </div>
+    <p class="note">G1/G2 are earlier-period grades that almost determine G3. Leave them off to see how study time, absences and background matter.</p>
+    <div class="scroll" style="margin-top:10px"><table id="results"></table></div>
+    <p class="note">MAE/RMSE are in grade points (0–20). R² is on the held-out test set; CV R² is the 5-fold average.</p>
+  </section>
+
+  <section class="card">
+    <h2>3 · Feature importance &amp; accuracy</h2>
+    <div class="grid">
+      <div>
+        <div class="tabs" id="impTabs"></div>
+        <div id="impBars"></div>
+        <p class="note" id="impKind"></p>
+      </div>
+      <div>
+        <label id="scLabel"></label>
+        <canvas id="scatter"></canvas>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>4 · Predict for a student</h2>
+    <div class="form" id="form"></div>
+    <div class="row" style="margin-top:14px">
+      <button id="predBtn">Predict final grade</button>
+      <button class="ghost" id="fillBtn">Reset form</button>
+    </div>
+    <div class="pred" id="pred" style="display:none"></div>
+    <div class="grade" id="gradeText"></div>
+  </section>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+let S = null, impModel = null;
+
+async function api(url, opts){
+  const r = await fetch(url, opts); const j = await r.json();
+  if(!r.ok) throw new Error(j.error || 'Request failed'); return j;
+}
+const post = (u,b)=>api(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b||{})});
+
+function render(){
+  const synth = S.source.includes('SYNTHETIC');
+  $('srcBadge').textContent = synth ? 'Sample data' : 'Real data';
+  $('srcBadge').className = 'badge ' + (synth ? 'synth' : 'real');
+  $('srcInfo').textContent = `${S.source} — ${S.rows} rows, ${S.cols} columns`;
+  $('mean').textContent = S.target_mean;
+  $('usePrev').checked = S.settings.use_prev;
+  $('dropZero').checked = S.settings.drop_zero;
+  $('testSize').value = Math.round(S.settings.test_size*100); $('tsv').textContent = $('testSize').value+'%';
+  ['uploadRow','uploadNote'].forEach(i=>$(i).style.display = S.read_only ? 'none' : '');
+  $('prevWrap').style.display = S.has_prev ? 'flex':'none';
+
+  const mx = Math.max(...S.hist,1);
+  $('hist').innerHTML = S.hist.map((c,i)=>`<div title="G3=${i}: ${c}" style="height:${c/mx*100}%"></div>`).join('');
+  $('histL').innerHTML = S.hist.map((_,i)=>`<span>${i%5==0?i:''}</span>`).join('');
+
+  const cols = S.preview_cols.slice(0,10);
+  $('preview').innerHTML = '<tr>'+cols.map(c=>`<th>${c}</th>`).join('')+'</tr>' +
+    S.preview.map(r=>'<tr>'+cols.map(c=>`<td>${r[c]??''}</td>`).join('')+'</tr>').join('');
+
+  const bestR2 = Math.max(...S.results.map(r=>r.r2));
+  $('results').innerHTML = '<tr><th>Model</th><th>MAE</th><th>RMSE</th><th>R² (test)</th><th>R² (5-fold CV)</th></tr>' +
+    S.results.map(r=>`<tr class="${r.r2===bestR2?'best':''}"><td>${r.model}${r.r2===bestR2?' ★':''}</td><td>${r.mae}</td><td>${r.rmse}</td><td>${r.r2}</td><td>${r.cv_r2}</td></tr>`).join('');
+
+  if(!impModel || !S.importance[impModel]) impModel = S.scatter.model;
+  renderImp(); drawScatter(); buildForm();
+}
+
+function renderImp(){
+  $('impTabs').innerHTML = Object.keys(S.importance).map(m=>`<div class="tab ${m===impModel?'on':''}" data-m="${m}">${m}</div>`).join('');
+  document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{impModel=t.dataset.m;renderImp();});
+  const d = S.importance[impModel], mx = Math.max(...d.items.map(i=>Math.abs(i.value)),1e-9);
+  $('impBars').innerHTML = d.items.map(i=>`<div class="bar"><div class="n" title="${i.name}">${i.name}</div>
+    <div class="track"><div class="fill ${i.value<0?'neg':''}" style="width:${Math.abs(i.value)/mx*100}%"></div></div>
+    <div class="v">${i.value}</div></div>`).join('');
+  $('impKind').textContent = d.kind + (impModel==='Linear Regression' ? ' · red = lowers grade' : '');
+}
+
+function drawScatter(){
+  const c = $('scatter'), dpr = window.devicePixelRatio||1;
+  const w = c.clientWidth, h = c.clientHeight; c.width = w*dpr; c.height = h*dpr;
+  const g = c.getContext('2d'); g.setTransform(dpr,0,0,dpr,0,0); g.clearRect(0,0,w,h);
+  const p = {l:36,r:10,t:10,b:30}, X = v=>p.l+v/20*(w-p.l-p.r), Y = v=>h-p.b-v/20*(h-p.t-p.b);
+  g.strokeStyle='#e4e7f0'; g.fillStyle='#6b7287'; g.font='11px system-ui'; g.lineWidth=1;
+  for(let v=0;v<=20;v+=5){
+    g.beginPath();g.moveTo(X(v),Y(0));g.lineTo(X(v),Y(20));g.stroke();
+    g.beginPath();g.moveTo(X(0),Y(v));g.lineTo(X(20),Y(v));g.stroke();
+    g.fillText(v,X(v)-4,h-p.b+14);g.fillText(v,p.l-20,Y(v)+4);
+  }
+  g.fillText('Actual G3',w/2-25,h-4);
+  g.save();g.translate(10,h/2+25);g.rotate(-Math.PI/2);g.fillText('Predicted',0,0);g.restore();
+  g.strokeStyle='#dc2626';g.setLineDash([5,4]);g.beginPath();g.moveTo(X(0),Y(0));g.lineTo(X(20),Y(20));g.stroke();g.setLineDash([]);
+  g.fillStyle='rgba(79,70,229,.55)';
+  S.scatter.actual.forEach((a,i)=>{g.beginPath();g.arc(X(a),Y(S.scatter.pred[i]),3.5,0,7);g.fill();});
+  $('scLabel').textContent = `Actual vs predicted on test set — best model: ${S.scatter.model}`;
+}
+
+function buildForm(){
+  const old = {}; document.querySelectorAll('#form [data-f]').forEach(e=>old[e.dataset.f]=e.value);
+  $('form').innerHTML = S.features.map(f=>{
+    const v = old[f.name] ?? f.default;
+    if(f.type==='select') return `<div><label>${f.name}</label><select data-f="${f.name}">${f.options.map(o=>`<option ${o==v?'selected':''}>${o}</option>`).join('')}</select></div>`;
+    return `<div><label>${f.name} <span style="opacity:.6">(${f.min}–${f.max})</span></label><input type="number" data-f="${f.name}" min="${f.min}" max="${f.max}" step="${f.step}" value="${v}"></div>`;
+  }).join('');
+}
+
+async function run(btn, fn){
+  const t = btn.textContent; btn.disabled = true; btn.textContent = 'Working…';
+  try{ await fn(); }catch(e){ alert(e.message); } finally{ btn.disabled=false; btn.textContent=t; }
+}
+
+$('trainBtn').onclick = ()=>run($('trainBtn'), async()=>{
+  S = await post('/api/train',{use_prev:$('usePrev').checked, drop_zero:$('dropZero').checked, test_size:$('testSize').value/100});
+  render();
+});
+$('testSize').oninput = ()=>$('tsv').textContent = $('testSize').value+'%';
+$('uploadBtn').onclick = ()=>run($('uploadBtn'), async()=>{
+  $('upErr').textContent=''; const f=$('file').files[0];
+  if(!f){$('upErr').textContent='Choose a CSV file first.';return;}
+  const fd=new FormData(); fd.append('file',f);
+  try{ S = await api('/api/upload',{method:'POST',body:fd}); impModel=null; render(); }
+  catch(e){ $('upErr').textContent=e.message; }
+});
+$('resetBtn').onclick = ()=>run($('resetBtn'), async()=>{ S = await post('/api/reset'); impModel=null; render(); });
+$('fillBtn').onclick = ()=>{
+  document.querySelectorAll('#form [data-f]').forEach(e=>{const f=S.features.find(x=>x.name===e.dataset.f); e.value=f.default;});
+};
+$('predBtn').onclick = ()=>run($('predBtn'), async()=>{
+  const values={}; document.querySelectorAll('#form [data-f]').forEach(e=>values[e.dataset.f]=e.value);
+  const r = (await post('/api/predict',{values})).predictions;
+  $('pred').style.display='grid';
+  $('pred').innerHTML = Object.entries(r).map(([m,v])=>`<div><b>${v}</b><span>${m}</span></div>`).join('');
+  const avg = Object.values(r).reduce((a,b)=>a+b,0)/Object.values(r).length;
+  const lvl = avg>=15?'Excellent 🌟':avg>=12?'Good 👍':avg>=10?'Pass — room to improve':'At risk ⚠️ — needs support';
+  $('gradeText').innerHTML = `Average prediction <b>${avg.toFixed(1)}/20</b> · ${lvl}`;
+});
+window.addEventListener('resize',()=>S&&drawScatter());
+api('/api/state').then(j=>{S=j;render();});
+</script>
+</body>
+</html>
